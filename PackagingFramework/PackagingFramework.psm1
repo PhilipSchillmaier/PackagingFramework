@@ -1718,7 +1718,10 @@ Function Exit-Script {
 	Param (
 		[Parameter(Mandatory=$false)]
 		[ValidateNotNullorEmpty()]
-		[int32]$ExitCode = 0
+		[int32]$ExitCode = 0,
+		[Parameter(Mandatory=$false)]
+		[ValidateSet("Install","Uninstall")]
+		[String]$DeploymentType
 	)
 	
 	# Set InstallPhase to exit script
@@ -1757,20 +1760,22 @@ Function Exit-Script {
 	If ($installSuccess -eq $true)
     {
         # Publish
-        If ($deploymentType -ieq 'Install')
+        If ($DeploymentType -ieq 'Install')
         {
             # AppConfig (Publishing, etc.)
             Invoke-AppConfig -Action Install
 
             # Add branding registry key
-            $Global:DisableLogging = $true
+			$Global:DisableLogging = $true
+			if ($PackageName){ Remove-RegistryKey -Key "$Script:ConfigRegPath\$PackagingFrameworkName\UninstalledPackages\$PackageName" -Recurse | Out-Null }
+			if ($PackageName){ Remove-RegistryKey -Key "$Script:ConfigRegPath\$PackagingFrameworkName\DeferHistory\$PackageName" -Recurse | Out-Null }
             if ($PackageName){ Set-RegistryKey -Key "$Script:ConfigRegPath\$PackagingFrameworkName\InstalledPackages\$PackageName" -Name "Installed" -Value 1 -Type DWord }
             if ($PackageName){ Set-RegistryKey -Key "$Script:ConfigRegPath\$PackagingFrameworkName\InstalledPackages\$PackageName" -Name "Date" -Value $(Get-Date -Format g) -Type String }
             $Global:DisableLogging = $false
         }
 
         # Unpublish
-        If ($deploymentType -ieq 'Uninstall')
+        If ($DeploymentType -ieq 'Uninstall')
         {
             # AppConfig (Unpublishing, etc.)
             Invoke-AppConfig -Action Uninstall
@@ -1780,7 +1785,10 @@ Function Exit-Script {
 
             # Add branding registry key
             $Global:DisableLogging = $true
-            if ($PackageName){ Remove-RegistryKey -Key "$Script:ConfigRegPath\$PackagingFrameworkName\InstalledPackages\$PackageName" -Recurse }
+			if ($PackageName){ Remove-RegistryKey -Key "$Script:ConfigRegPath\$PackagingFrameworkName\InstalledPackages\$PackageName" -Recurse | Out-Null }
+			if ($PackageName){ Remove-RegistryKey -Key "$Script:ConfigRegPath\$PackagingFrameworkName\DeferHistory\$PackageName" -Recurse | Out-Null }
+			if ($PackageName){ Set-RegistryKey -Key "$Script:ConfigRegPath\$PackagingFrameworkName\UninstalledPackages\$PackageName" -Name "Installed" -Value 0 -Type DWord }
+			if ($PackageName){ Set-RegistryKey -Key "$Script:ConfigRegPath\$PackagingFrameworkName\UninstalledPackages\$PackageName" -Name "Date" -Value $(Get-Date -Format g) -Type String }
             $Global:DisableLogging = $false
         }
     }
@@ -1807,11 +1815,11 @@ Function Exit-Script {
 			[int32]$exitCode = 0
 		}
 		
-		Write-Log -Message "$installName $DeploymentTypeName completed with exit code [$exitcode]." -Source ${CmdletName}
+		Write-Log -Message "$PackageName $DeploymentType completed with exit code [$exitcode]." -Source ${CmdletName}
 		If ($Script:configShowBalloonNotifications) { Show-BalloonTip -BalloonTipIcon 'Info' -BalloonTipText $balloonText }
 	}
 	ElseIf (-not $installSuccess) {
-		Write-Log -Message "$installName $DeploymentTypeName completed with exit code [$exitcode]." -Source ${CmdletName}
+		Write-Log -Message "$PackageName $DeploymentType completed with exit code [$exitcode]." -Source ${CmdletName}
 		If (($exitCode -eq $Script:configInstallationUIExitCode) -or ($exitCode -eq $Script:configInstallationDeferExitCode)) {
             [string]$balloonText = "$DeploymentTypeName $Script:configBalloonTextFastRetry"
 			If ($Script:configShowBalloonNotifications) { Show-BalloonTip -BalloonTipIcon 'Warning' -BalloonTipText $balloonText }
@@ -4284,7 +4292,7 @@ Function Initialize-Script {
     
     ## Set default vars if vars have not been specified
     If (-not $AppName) {
-	    [string]$AppName = $PackagingFrameworkName
+	    [string]$AppName = $PackageName
 	    If (-not $AppVendor) { [string]$AppVendor = 'PS' }
 	    If (-not $AppVersion) { [string]$AppVersion = $PackagingFrameworkModuleVersion }
 	    If (-not $AppLang) { [string]$AppLang = $CurrentLanguage }
@@ -4292,9 +4300,9 @@ Function Initialize-Script {
 	    If (-not $AppArch) { [string]$AppArch = '' }
     }
     If ($ReferredInstallTitle) { [string]$installTitle = $ReferredInstallTitle }
-    If (-not $installTitle) {
-	    [string]$installTitle = ("$AppVendor $AppName $AppVersion").Trim()
-    }
+    If ((-not $installTitle) -or ($installTitle -eq "PackagingFramework")) {
+	    [string]$Global:InstallTitle = ("$AppName $AppVersion").Trim()
+	}
     
     ## Sanitize the application details, as they can cause issues in the script
     [char[]]$InvalidFileNameChars = [IO.Path]::GetInvalidFileNameChars()
@@ -4436,9 +4444,9 @@ Function Initialize-Script {
 
     # Deployment Type text strings
     Switch ($DeploymentType) {
-	    'Install'   { $DeploymentTypeName = $script:configDeploymentTypeInstall }
-	    'Uninstall' { $DeploymentTypeName = $script:configDeploymentTypeUnInstall }
-	    Default { $DeploymentTypeName = $script:configDeploymentTypeInstall }
+	    'Install'   { $Global:DeploymentTypeName = $script:configDeploymentTypeInstall }
+	    'Uninstall' { $Global:DeploymentTypeName = $script:configDeploymentTypeUnInstall }
+	    Default { $Global:DeploymentTypeName = $script:configDeploymentTypeInstall }
     }
 
     ## Check current permissions and exit if not running with Administrator rights
@@ -4543,9 +4551,10 @@ Function Initialize-Script {
             else { [psobject]$Global:PackageConfigFile = get-content $JSONFile -Raw | ConvertFrom-Json } # ps versions older than 5 need the -raw paraemter
             [string]$PackageDate = $PackageConfigFile.Package.PackageDate
             [string]$PackageAuthor = $PackageConfigFile.Package.PackageAuthor
-            [string]$PackageDescription = $PackageConfigFile.Package.PackageDescription
-            [string]$InstallName = $Global:PackageName
-            [string]$InstallTitle = $Global:PackageName
+			[string]$PackageDescription = $PackageConfigFile.Package.PackageDescription
+			[string]$PackageGUIName = $PackageConfigFile.Package.PackageGUIName
+            [string]$Global:InstallName = $PackageGUIName
+            [string]$Global:InstallTitle = $PackageGUIName
         }
 
         # Make a local copy of the JSON file in the package log folder (e.g. used later for Citrix publishing)
@@ -6992,7 +7001,7 @@ Function New-Package {
 	Param (
 		[Parameter(Mandatory=$true)]
 		[ValidateNotNullorEmpty()]
-   		[string]$Path,
+   	[string]$Path,
 		[Parameter(Mandatory=$true)]
 		[ValidateNotNullOrEmpty()]
 		[string]$Name,
@@ -7062,10 +7071,10 @@ Try {
     }
 
     # Call the exit-Script
-    Exit-Script -ExitCode `$mainExitCode
+    Exit-Script -ExitCode `$mainExitCode -DeploymentType `$DeploymentType
 
 }
-Catch { [int32]`$mainExitCode = 60001; [string]`$mainErrorMessage = "`$(Resolve-Error)" ; Write-Log -Message `$mainErrorMessage -Severity 3 -Source `$PackagingFrameworkName ; Show-DialogBox -Text `$mainErrorMessage -Icon 'Stop' ; Exit-Script -ExitCode `$mainExitCode}
+Catch { [int32]`$mainExitCode = 60001; [string]`$mainErrorMessage = "`$(Resolve-Error)" ; Write-Log -Message `$mainErrorMessage -Severity 3 -Source `$PackagingFrameworkName ; Show-DialogBox -Text `$mainErrorMessage -Icon 'Stop' ; Exit-Script -ExitCode `$mainExitCode -DeploymentType `$DeploymentType}
 "@
 # Save the PS1 file
 Write-Log "Create $Name.ps1" -Source "Out-File"
@@ -7075,15 +7084,11 @@ $TemplateFile | Out-File -FilePath "$Path\$Name\$Name.ps1" -Encoding utf8
 [string]$TemplateFile = @"
 {
   "Package": {
-    "PackageDate": "$(Get-Date -Format d)",
-    "PackageAuthor": "$env:USERNAME",
-    "PackageDescription": "$AppVendor $AppName $AppVersion"
+  "PackageDate": "$(Get-Date -Format d)",
+  "PackageAuthor": "$env:USERNAME",
+  "PackageDescription": "$AppVendor $AppName $AppVersion",
+  "PackageGUIName": "$AppName $AppVersion"
   },
-  "Applications": [ ],
-  "DetectionMethods": [ ],
-  "Dependencies": [ ],
-  "Parameters": { },
-  "Notes": [ ],
   "ChangeLog": [
     "Version 1.0 initial release"
   ]
@@ -8842,7 +8847,7 @@ Function Set-AutoAdminLogon{
 .EXAMPLE
     Set-AutoAdminLogon -Username $env:USERNAME -Password (Read-Host -AsSecureString) -AutoLogonCount 2 -RemoveLegalPrompt
 .EXAMPLE
-    $SecurePassword=ConvertTo-SecureString 'Passw0rd' –asplaintext –force
+    $SecurePassword=ConvertTo-SecureString 'Passw0rd' ï¿½asplaintext ï¿½force
     Set-AutoAdminLogon -Username $env:USERNAME -Password $SecurePassword -AutoLogonCount 3 -Script "c:\Temp\MyScript.cmd"
 .EXAMPLE
     Set-AutoAdminLogon -Purge
