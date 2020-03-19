@@ -31,7 +31,7 @@ VIAddVersionKey "CompanyName" "ceterion AG"
 !define MUI_HEADERIMAGE_RIGHT
 !define MUI_WELCOMEFINISHPAGE_BITMAP "PackagingFrameworkSetupWizardInstall.bmp"
 !define MUI_UNWELCOMEFINISHPAGE_BITMAP "PackagingFrameworkSetupWizardUninstall.bmp"
-!define MUI_FINISHPAGE_SHOWREADME $INSTDIR\PackagingFramework\readme.txt
+#!define MUI_FINISHPAGE_SHOWREADME $INSTDIR\PackagingFramework\readme.txt
 
 # Pages
 !insertmacro MUI_PAGE_WELCOME
