@@ -4261,6 +4261,7 @@ Function Initialize-Script {
 	[string]$Script:configRestartPromptButtonRestartNow = $ModuleConfigFile.Localization.$UILanguage.RestartPromptButtonRestartNow
 	[string]$Script:configWelcomePromptCountdownMessage = $ModuleConfigFile.Localization.$UILanguage.WelcomePromptCountdownMessage
 	[string]$Script:configWelcomePromptCustomMessage = $ModuleConfigFile.Localization.$UILanguage.WelcomePromptCustomMessage
+	[string]$Script:configInstallationDurationMessage = $ModuleConfigFile.Localization.$UILanguage.InstallationDurationMessage
 
 
 
@@ -4553,6 +4554,7 @@ Function Initialize-Script {
             [string]$PackageAuthor = $PackageConfigFile.Package.PackageAuthor
 			[string]$PackageDescription = $PackageConfigFile.Package.PackageDescription
 			[string]$PackageGUIName = $PackageConfigFile.Package.PackageGUIName
+			[string]$Global:PackageInstallDuration = $PackageConfigFile.Package.PackageInstallDuration
             [string]$Global:InstallName = $PackageGUIName
             [string]$Global:InstallTitle = $PackageGUIName
         }
@@ -7062,11 +7064,13 @@ Try {
 
     # Install
     If (`$deploymentType -ieq 'Install') {
+		Show-InstallationWelcome -CloseApps 'winword=Microsoft Office Word,notepad=Editor(Notepad)' -AllowDefer -DeferTimes '5' -MinimizeWindows `$false -InstallationDuration `$PackageInstallDuration
         # <PLACE YOUR CODE HERE>
     }
 
     # Uninstall
     If (`$deploymentType -ieq 'Uninstall') {
+		Show-InstallationWelcome -CloseApps 'winword=Microsoft Office Word,notepad=Editor(Notepad)' -AllowDefer -DeferTimes '5' -MinimizeWindows `$false
         # <PLACE YOUR CODE HERE>
     }
 
@@ -7084,10 +7088,11 @@ $TemplateFile | Out-File -FilePath "$Path\$Name\$Name.ps1" -Encoding utf8
 [string]$TemplateFile = @"
 {
   "Package": {
-  "PackageDate": "$(Get-Date -Format d)",
-  "PackageAuthor": "$env:USERNAME",
-  "PackageDescription": "$AppVendor $AppName $AppVersion",
-  "PackageGUIName": "$AppName $AppVersion"
+    "PackageDate": "$(Get-Date -Format d)",
+    "PackageAuthor": "$env:USERNAME",
+    "PackageDescription": "$AppVendor $AppName $AppVersion",
+    "PackageGUIName": "$AppName $AppVersion",
+    "PackageInstallDuration": "5"
   },
   "ChangeLog": [
     "Version 1.0 initial release"
@@ -11655,8 +11660,18 @@ Function Show-InstallationRestartPrompt {
 		$labelMessage.Name = 'labelMessage'
 		$labelMessage.Size = '400,79'
 		$labelMessage.TabIndex = 3
-		$labelMessage.Text = "$Script:configRestartPromptMessage $Script:configRestartPromptMessageTime `n`n$Script:configRestartPromptMessageRestart"
-		If ($NoCountdown) { $labelMessage.Text = $Script:configRestartPromptMessage }
+		if($deploymentType -ieq "Install") {
+			$labelMessage.Text = ($Script:configRestartPromptMessage -f $($Script:configDeploymentTypeInstall)) + "$Script:configRestartPromptMessageTime `n`n$Script:configRestartPromptMessageRestart"
+		} else {
+			$labelMessage.Text = ($Script:configRestartPromptMessage -f $($Script:configDeploymentTypeUninstall)) + "$Script:configRestartPromptMessageTime `n`n$Script:configRestartPromptMessageRestart"
+		}
+		If ($NoCountdown) { 
+			if($deploymentType -ieq "Install") {
+				$labelMessage.Text = ($Script:configRestartPromptMessage -f $($Script:configDeploymentTypeInstall))
+			} else {
+				$labelMessage.Text = ($Script:configRestartPromptMessage -f $($Script:configDeploymentTypeUninstall))
+			}
+		}
 		$labelMessage.TextAlign = 'MiddleCenter'
 		
 		## Label Time Remaining
@@ -11871,7 +11886,11 @@ Function Show-InstallationWelcome {
 		[int32]$ForceCountdown = 0,
 		## Specify whether to display a custom message specified in the XML file. Custom message must be populated for each language section in the XML.
 		[Parameter(Mandatory=$false)]
-		[switch]$CustomText = $false
+		[switch]$CustomText = $false,
+		## Show the approximate installation duration in the GUI
+		[Parameter(Mandatory=$false)]
+		[ValidateNotNullorEmpty()]
+		[string]$InstallationDuration
 	)
 	
 	Begin {
@@ -12025,12 +12044,20 @@ Function Show-InstallationWelcome {
 					}
 					#  Otherwise, as long as the user has not selected to close the apps or the processes are still running and the user has not selected to continue, prompt user to close running processes with deferral
 					ElseIf (($promptResult -ne 'Close') -or (($runningProcessDescriptions) -and ($promptResult -ne 'Continue'))) {
-						[string]$promptResult = Show-WelcomePrompt -ProcessDescriptions $runningProcessDescriptions -CloseAppsCountdown $closeAppsCountdownGlobal -ForceCloseAppsCountdown $forceCloseAppsCountdown -ForceCountdown $forceCountdown -PersistPrompt $PersistPrompt -AllowDefer -DeferTimes $deferTimes -DeferDeadline $deferDeadlineUniversal -MinimizeWindows $MinimizeWindows -CustomText:$CustomText -TopMost $TopMost
+						if($InstallationDuration) {
+							[string]$promptResult = Show-WelcomePrompt -ProcessDescriptions $runningProcessDescriptions -CloseAppsCountdown $closeAppsCountdownGlobal -ForceCloseAppsCountdown $forceCloseAppsCountdown -ForceCountdown $forceCountdown -PersistPrompt $PersistPrompt -AllowDefer -DeferTimes $deferTimes -DeferDeadline $deferDeadlineUniversal -MinimizeWindows $MinimizeWindows -CustomText:$CustomText -TopMost $TopMost -InstallationDuration $InstallationDuration
+						} else {
+							[string]$promptResult = Show-WelcomePrompt -ProcessDescriptions $runningProcessDescriptions -CloseAppsCountdown $closeAppsCountdownGlobal -ForceCloseAppsCountdown $forceCloseAppsCountdown -ForceCountdown $forceCountdown -PersistPrompt $PersistPrompt -AllowDefer -DeferTimes $deferTimes -DeferDeadline $deferDeadlineUniversal -MinimizeWindows $MinimizeWindows -CustomText:$CustomText -TopMost $TopMost
+						}
 					}
 				}
 				#  If there is no deferral and processes are running, prompt the user to close running processes with no deferral option
 				ElseIf (($runningProcessDescriptions) -or ($forceCountdown)) {
-					[string]$promptResult = Show-WelcomePrompt -ProcessDescriptions $runningProcessDescriptions -CloseAppsCountdown $closeAppsCountdownGlobal -ForceCloseAppsCountdown $forceCloseAppsCountdown -ForceCountdown $forceCountdown -PersistPrompt $PersistPrompt -MinimizeWindows $minimizeWindows -CustomText:$CustomText -TopMost $TopMost
+					if($InstallationDuration) {
+						[string]$promptResult = Show-WelcomePrompt -ProcessDescriptions $runningProcessDescriptions -CloseAppsCountdown $closeAppsCountdownGlobal -ForceCloseAppsCountdown $forceCloseAppsCountdown -ForceCountdown $forceCountdown -PersistPrompt $PersistPrompt -MinimizeWindows $minimizeWindows -CustomText:$CustomText -TopMost $TopMost -InstallationDuration $InstallationDuration
+					} else {
+						[string]$promptResult = Show-WelcomePrompt -ProcessDescriptions $runningProcessDescriptions -CloseAppsCountdown $closeAppsCountdownGlobal -ForceCloseAppsCountdown $forceCloseAppsCountdown -ForceCountdown $forceCountdown -PersistPrompt $PersistPrompt -MinimizeWindows $minimizeWindows -CustomText:$CustomText -TopMost $TopMost
+					}
 				}
 				#  If there is no deferral and no processes running, break the while loop
 				Else {
@@ -12038,7 +12065,7 @@ Function Show-InstallationWelcome {
 				}
 				
 				#  If the user has clicked OK, wait a few seconds for the process to terminate before evaluating the running processes again
-				If ($promptResult -eq 'Continue') {
+				If ($promptResult -like '*Continue') {
 					Write-Log -Message 'User selected to continue...' -Source ${CmdletName}
 					Start-Sleep -Seconds 2
 					
@@ -12046,7 +12073,7 @@ Function Show-InstallationWelcome {
 					If (-not $runningProcesses) { Break }
 				}
 				#  Force the applications to close
-				ElseIf ($promptResult -eq 'Close') {
+				ElseIf ($promptResult -like '*Close') {
 					Write-Log -Message 'User selected to force the application(s) to close...' -Source ${CmdletName}
 					If (($PromptToSave) -and ($SessionZero -and (-not $IsProcessUserInteractive))) {
 						Write-Log -Message 'Specified [-PromptToSave] option will not be available because current process is running in session zero and is not interactive.' -Severity 2 -Source ${CmdletName}
@@ -12100,7 +12127,7 @@ Function Show-InstallationWelcome {
 					Start-Sleep -Seconds 2
 				}
 				#  Stop the script (if not actioned before the timeout value)
-				ElseIf ($promptResult -eq 'Timeout') {
+				ElseIf ($promptResult -like '*Timeout') {
 					Write-Log -Message 'Installation not actioned before the timeout value.' -Source ${CmdletName}
 					$BlockExecution = $false
 					
@@ -12122,7 +12149,7 @@ Function Show-InstallationWelcome {
 					Exit-Script -ExitCode $Script:configInstallationUIExitCode
 				}
 				#  Stop the script (user chose to defer)
-				ElseIf ($promptResult -eq 'Defer') {
+				ElseIf ($promptResult -like '*Defer') {
 					Write-Log -Message 'Installation deferred by the user.' -Source ${CmdletName}
 					$BlockExecution = $false
 					
@@ -12232,6 +12259,8 @@ Function Show-WelcomePrompt {
 	Specify a countdown to display before automatically proceeding with the installation when a deferral is enabled.
 .PARAMETER CustomText
 	Specify whether to display a custom message specified in the XML file. Custom message must be populated for each language section in the XML.
+.PARAMETER InstallationDuration
+	Show the approximate installation duration in the GUI
 .EXAMPLE
 	Show-WelcomePrompt -ProcessDescriptions 'Lotus Notes, Microsoft Word' -CloseAppsCountdown 600 -AllowDefer -DeferTimes 10
 .NOTES
@@ -12268,7 +12297,10 @@ Function Show-WelcomePrompt {
 		[ValidateNotNullorEmpty()]
 		[int32]$ForceCountdown = 0,
 		[Parameter(Mandatory=$false)]
-		[switch]$CustomText = $false
+		[switch]$CustomText = $false,
+		[Parameter(Mandatory=$false)]
+		[ValidateNotNullorEmpty()]
+		[string]$InstallationDuration
 	)
 	
 	Begin {
@@ -12281,6 +12313,7 @@ Function Show-WelcomePrompt {
 		[boolean]$showCloseApps = $false
 		[boolean]$showDefer = $false
 		[boolean]$persistWindow = $false
+		[boolean]$showDuration = $false
 		
 		## Reset times
 		[datetime]$startTime = Get-Date
@@ -12307,6 +12340,15 @@ Function Show-WelcomePrompt {
 				#  Convert the deadline date to a string
 				[string]$deferDeadline = (Get-Date -Date $deferDeadline).ToString()
 			}
+		}
+
+		if ($InstallationDuration) {
+			Write-Log -Message "Approximate installation duration is: $InstallationDuration" -Source ${CmdletName}
+			$showDuration = $true
+		}
+
+		if ($showDuration) {
+			if ($persistPrompt) { $persistWindow = $true }
 		}
 		
 		## If deferral is being shown and 'close apps countdown' or 'persist prompt' was specified, enable those features.
@@ -12347,6 +12389,7 @@ Function Show-WelcomePrompt {
 		$flowLayoutPanel = New-Object -TypeName 'System.Windows.Forms.FlowLayoutPanel'
 		$panelButtons = New-Object -TypeName 'System.Windows.Forms.Panel'
 		$toolTip = New-Object -TypeName 'System.Windows.Forms.ToolTip'
+		$labelDuration = New-Object -TypeName 'System.Windows.Forms.Label'
 		
 		## Remove all event handlers from the controls
 		[scriptblock]$Form_Cleanup_FormClosed = {
@@ -12361,6 +12404,7 @@ Function Show-WelcomePrompt {
 				$timerPersist.remove_Tick($timerPersist_Tick)
 				$formWelcome.remove_Load($Form_StateCorrection_Load)
 				$formWelcome.remove_FormClosed($Form_Cleanup_FormClosed)
+				$labelDuration.remove_Click($handler_labelDuration_Click)
 			}
 			Catch { }
 		}
@@ -12387,6 +12431,9 @@ Function Show-WelcomePrompt {
 				Else { $labelCountdown.Text = ($configWelcomePromptCountdownMessage -f $($configDeploymentTypeUninstall.ToLower())) + "`n$labelCountdownSeconds" } 
 			}
 			Else { $labelCountdown.Text = "$configClosePromptCountdownMessage`n$labelCountdownSeconds" }
+
+			
+			
 		}
 		
 		## Add the timer if it doesn't already exist - this avoids the timer being reset if the continue button is clicked
@@ -12506,10 +12553,18 @@ Function Show-WelcomePrompt {
 		
 		## Initial form layout: Close Applications / Allow Deferral
 		If ($showCloseApps) {
-			$labelAppNameText = $configClosePromptMessage
+			if($deploymentType -ieq "Install") {
+				$labelAppNameText = ($configClosePromptMessage -f $($configDeploymentTypeInstall.ToLower()))
+			} else {
+				$labelAppNameText = ($configClosePromptMessage -f $($configDeploymentTypeUninstall.ToLower()))
+			}
 		}
 		ElseIf (($showDefer) -or ($forceCountdown)) {
-			$labelAppNameText = "$configDeferPromptWelcomeMessage `n$installTitle"
+			if($deploymentType -ieq "Install") {
+				$labelAppNameText = ($configDeferPromptWelcomeMessage -f $($configDeploymentTypeInstall)) + " `n$installTitle"
+			} else {
+				$labelAppNameText = ($configDeferPromptWelcomeMessage -f $($configDeploymentTypeUninstall)) + " `n$installTitle"
+			}
 		}
 		If ($CustomText) {
 			$labelAppNameText = "$labelAppNameText `n`n$configWelcomePromptCustomMessage"
@@ -12545,7 +12600,11 @@ Function Show-WelcomePrompt {
 		$labelDefer.Margin = $paddingNone
 		$labelDefer.Padding = $labelPadding
 		$labelDefer.TabIndex = 4
-		$deferralText = "$configDeferPromptExpiryMessage`n"
+		if($deploymentType -ieq "Install") {
+			$deferralText = ($configDeferPromptExpiryMessage -f $($configDeploymentTypeInstall)) + "`n"
+		} else {
+			$deferralText = ($configDeferPromptExpiryMessage -f $($configDeploymentTypeUninstall)) + "`n"
+		}
 		
 		If ($deferTimes -ge 0) {
 			$deferralText = "$deferralText `n$configDeferPromptRemainingDeferrals $([int32]$deferTimes + 1)"
@@ -12556,12 +12615,34 @@ Function Show-WelcomePrompt {
 		If (($deferTimes -lt 0) -and (-not $DeferDeadline)) {
 			$deferralText = "$deferralText `n$configDeferPromptNoDeadline"
 		}
-		$deferralText = "$deferralText `n`n$configDeferPromptWarningMessage"
+		if($deploymentType -ieq "Install") {
+			$deferralText = "$deferralText `n`n" + ($configDeferPromptWarningMessage -f $($configDeploymentTypeInstall))
+		} else {
+			$deferralText = "$deferralText `n`n" + ($configDeferPromptWarningMessage -f $($configDeploymentTypeUninstall))
+		}
 		$labelDefer.Text = $deferralText
 		$labelDefer.TextAlign = 'MiddleCenter'
 		$labelDefer.AutoSize = $true
 		$labelDefer.add_Click($handler_labelDefer_Click)
 		
+		## Label Duration
+		$labelDuration.DataBindings.DefaultDataSourceUpdateMode = 0
+		$labelDuration.Name = 'labelDuration'
+		$System_Drawing_Size = New-Object -TypeName 'System.Drawing.Size'
+		$System_Drawing_Size.Height = 40
+		$System_Drawing_Size.Width = 450
+		$labelDuration.Size = $System_Drawing_Size
+		$System_Drawing_Size.Height = 0
+		$labelDuration.MaximumSize = $System_Drawing_Size
+		$labelDuration.Margin = "100,0,0,0"
+		$labelDuration.Padding = $labelPadding
+		$labelDuration.TabIndex = 5
+		$durationText = "$configInstallationDurationMessage $InstallationDuration`n"
+		$labelDuration.Text = $durationText
+		$labelDuration.TextAlign = 'BottomCenter'
+		$labelDuration.AutoSize = $true
+		$labelDuration.add_Click($handler_labelDuration_Click)
+
 		## Label Countdown
 		$labelCountdown.DataBindings.DefaultDataSourceUpdateMode = 0
 		$labelCountdown.Name = 'labelCountdown'
@@ -12593,6 +12674,9 @@ Function Show-WelcomePrompt {
 		If ($showCloseApps) { $flowLayoutPanel.Controls.Add($listBoxCloseApps) }
 		If ($showDefer) {
 			$flowLayoutPanel.Controls.Add($labelDefer)
+		}
+		if ($showDuration) {
+			$flowLayoutPanel.Controls.Add($labelDuration)
 		}
 		If ($showCountdown) {
 			$flowLayoutPanel.Controls.Add($labelCountdown)
