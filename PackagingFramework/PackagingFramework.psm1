@@ -28,6 +28,8 @@ $Script:ConfigLogWriteToHost = $true
 $Script:ConfigLogDebugMessage =$false
 $Global:LogDir = "$env:WinDir\Logs\Software"
 
+$Global:DisableLogging = $false
+
 ##*=============================================
 ##* FUNCTION LISTINGS (sorted from A - Z)
 ##*=============================================
@@ -3823,7 +3825,7 @@ Function Initialize-Script {
 
     ## Variables: PackagingFramework general
     [string]$Global:PackagingFrameworkName = 'PackagingFramework'
-    [string]$Global:InstallTitle = "PackagingFramework"
+	[string]$Global:InstallTitle = "PackagingFramework"
     
     ## Variables: Script Info
     [version]$Global:PackagingFrameworkModuleVersion = (Get-Module PackagingFramework).Version
@@ -7057,6 +7059,7 @@ Function New-Package {
             # Create PS1 file
 [string]$TemplateFile = @"
 [CmdletBinding()] Param ([Parameter(Mandatory=`$false)] [ValidateSet('Install','Uninstall')] [string]`$DeploymentType='Install', [Parameter(Mandatory=`$false)] [ValidateSet('Interactive','Silent','NonInteractive')] [string]`$DeployMode='Interactive', [Parameter(Mandatory=`$false)] [string]`$CustomParameter)
+`$Global:DeploymentType = `$DeploymentType
 Try {
 
     # Import Packaging Framework module
