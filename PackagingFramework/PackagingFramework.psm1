@@ -7071,7 +7071,7 @@ Function New-Package {
 		[ValidateNotNullOrEmpty()]
 		[string]$Name,
 		[Parameter(Mandatory=$false)]
-		[switch]$ExcludeModuleFiles,
+		[bool]$ExcludeModuleFiles = $false,
 		[Parameter(Mandatory=$false)]
 		[switch]$SkipNameCheck,
 		[Parameter(Mandatory=$false)]
@@ -7108,8 +7108,8 @@ Function New-Package {
             # Create new files folder inside the package folder
             New-Folder -path "$Path\$Name\Files"
 
-            # Copy packageing Framework module fiels (if ExcludeModuleFiles is not specified)
-            if (-not ($ExcludeModuleFiles)) 
+            # Copy packageing Framework module files (if ExcludeModuleFiles is not specified)
+            if ($ExcludeModuleFiles -eq $true) 
             {
                 $ModuleBaseMain = $((Get-Module -Name PackagingFramework).ModuleBase) | Select-Object -last  1
                 $ModuleBaseExtension = $((Get-Module -Name PackagingFrameworkExtension).ModuleBase) | Select-Object -last  1
@@ -7128,13 +7128,13 @@ Try {
 
     # Install
     If (`$deploymentType -ieq 'Install') {
-		Show-InstallationWelcome -CloseApps 'winword=Microsoft Office Word,notepad=Editor(Notepad)' -AllowDefer -DeferTimes '5' -MinimizeWindows `$false -InstallationDuration `$PackageInstallDuration
+		Show-InstallationWelcome -AllowDefer -DeferDays '1' -MinimizeWindows `$false -InstallationDuration `$PackageInstallDuration
         # <PLACE YOUR CODE HERE>
     }
 
     # Uninstall
     If (`$deploymentType -ieq 'Uninstall') {
-		Show-InstallationWelcome -CloseApps 'winword=Microsoft Office Word,notepad=Editor(Notepad)' -AllowDefer -DeferTimes '5' -MinimizeWindows `$false
+		Show-InstallationWelcome -CloseApps 'calc=Rechner' -AllowDefer -DeferDays '1' -MinimizeWindows `$false
         # <PLACE YOUR CODE HERE>
     }
 
@@ -16993,4 +16993,4 @@ Function Write-FunctionHeaderOrFooter {
 
 
 ## Export functions, aliases and variables
-Export-ModuleMember -Function Add-Font, Add-Path, Close-InstallationProgress, Convert-Base64, ConvertFrom-AAPIni, ConvertFrom-Ini, ConvertFrom-IniFiletoObjectCollection, ConvertTo-Ini, ConvertTo-NTAccountOrSID, Copy-File, Disable-TerminalServerInstallMode, Edit-StringInFile, Enable-TerminalServerInstallMode, Exit-Script, Expand-Variable, Get-FileVerb, Get-EnvironmentVariable, Get-FileVersion, Get-FreeDiskSpace, Get-HardwarePlatform, Get-IniValue, Get-InstalledApplication, Get-LoggedOnUser, Get-Path, Get-Parameter, Get-PendingReboot, Get-RegistryKey, Get-ServiceStartMode, Get-WindowTitle, Import-RegFile, Initialize-Script, Install-DeployPackageService, Install-MSUpdates, Install-MultiplePackages, Install-SCCMSoftwareUpdates, Invoke-FileVerb, Invoke-Encryption, Invoke-InstallOrRemoveAssembly, Invoke-RegisterOrUnregisterDLL, Invoke-SCCMTask, New-File, New-Folder, New-LayoutModificationXML, New-MsiTransform, New-Package, New-Shortcut, Remove-EnvironmentVariable, Remove-File, Remove-Folder, Remove-Font, Remove-IniKey, Remove-IniSection, Remove-MSIApplications, Remove-Path, Remove-RegistryKey, Resolve-Error, Send-Keys, Set-ActiveSetup, Set-AutoAdminLogon, Set-DisableLogging, Set-EnvironmentVariable, Set-Inheritance, Set-IniValue, Set-InstallPhase, Set-PinnedApplication, Set-RegistryKey, Set-ServiceStartMode, Show-DialogBox, Show-HelpConsole, Show-BalloonTip, Show-InstallationProgress, Show-InstallationWelcome, Show-InstallationRestartPrompt, Show-InstallationPrompt, Start-IntuneWrapper, Start-MSI, Start-NSISWrapper, Start-Program, Start-ServiceAndDependencies, Stop-ServiceAndDependencies, Test-IsGroupMember, Test-MSUpdates, Test-Package, Test-PackageName, Test-Ping, Test-RegistryKey, Test-ServiceExists, Update-Desktop, Update-FilePermission, Update-FolderPermission, Update-FrameworkInPackages, Update-Ownership, Update-PrinterPermission, Update-RegistryPermission, Update-SessionEnvironmentVariables, Write-FunctionHeaderOrFooter, Write-Log
+Export-ModuleMember -Function Add-Font, Add-Path, Close-InstallationProgress, Convert-Base64, ConvertFrom-AAPIni, ConvertFrom-Ini, ConvertFrom-IniFiletoObjectCollection, ConvertTo-Ini, ConvertTo-NTAccountOrSID, Copy-File, Disable-TerminalServerInstallMode, Edit-StringInFile, Enable-TerminalServerInstallMode, Exit-Script, Expand-Variable, Get-FileVerb, Get-EnvironmentVariable, Get-FileVersion, Get-FreeDiskSpace, Get-HardwarePlatform, Get-IniValue, Get-InstalledApplication, Get-LoggedOnUser, Get-Path, Get-Parameter, Get-PendingReboot, Get-RegistryKey, Get-ServiceStartMode, Get-UniversalDate, Get-WindowTitle, Import-RegFile, Initialize-Script, Install-DeployPackageService, Install-MSUpdates, Install-MultiplePackages, Install-SCCMSoftwareUpdates, Invoke-FileVerb, Invoke-Encryption, Invoke-InstallOrRemoveAssembly, Invoke-RegisterOrUnregisterDLL, Invoke-SCCMTask, New-File, New-Folder, New-LayoutModificationXML, New-MsiTransform, New-Package, New-Shortcut, Remove-EnvironmentVariable, Remove-File, Remove-Folder, Remove-Font, Remove-IniKey, Remove-IniSection, Remove-MSIApplications, Remove-Path, Remove-RegistryKey, Resolve-Error, Send-Keys, Set-ActiveSetup, Set-AutoAdminLogon, Set-DisableLogging, Set-EnvironmentVariable, Set-Inheritance, Set-IniValue, Set-InstallPhase, Set-PinnedApplication, Set-RegistryKey, Set-ServiceStartMode, Show-DialogBox, Show-HelpConsole, Show-BalloonTip, Show-InstallationProgress, Show-InstallationWelcome, Show-InstallationRestartPrompt, Show-InstallationPrompt, Start-IntuneWrapper, Start-MSI, Start-NSISWrapper, Start-Program, Start-ServiceAndDependencies, Stop-ServiceAndDependencies, Test-IsGroupMember, Test-MSUpdates, Test-Package, Test-PackageName, Test-Ping, Test-RegistryKey, Test-ServiceExists, Update-Desktop, Update-FilePermission, Update-FolderPermission, Update-FrameworkInPackages, Update-Ownership, Update-PrinterPermission, Update-RegistryPermission, Update-SessionEnvironmentVariables, Write-FunctionHeaderOrFooter, Write-Log
