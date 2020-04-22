@@ -4138,11 +4138,26 @@ Function Initialize-Script {
     ## Check deployment type (install/uninstall)
     If ($DeploymentType) { Write-Log -Message "Installation is running in [$DeploymentType] type." -Source $PackagingFrameworkName }
 
+	
+    ## Get package info
+    #if(-not($Global:PackageFileName)) { [string]$Global:PackageFileName = [IO.Path]::GetFileNameWithoutExtension($MyInvocation.PSCommandPath)}
+    #if(-not($Global:PackageName)) { [string]$Global:PackageName = [IO.Path]::GetFileNameWithoutExtension($MyInvocation.PSCommandPath)}
+    [string]$Global:PackageFileName = [IO.Path]::GetFileNameWithoutExtension($MyInvocation.PSCommandPath)
+    [string]$Global:PackageName = [IO.Path]::GetFileNameWithoutExtension($MyInvocation.PSCommandPath)
+    
+    # If package name is not defined we assumed module is used outside a package and because of this we disable the logging
+	if(!$PackageName) {$Global:DisableLogging = $true}
+	
+	if($PackageName -like "USR_*") { 
+		$PackageJsonFileName = "PackagingFrameworkUser.json"
+	} else {
+		$PackageJsonFileName = "PackagingFramework.json"
+	}
 
     ## Variables: Module Dependency Files (incl. if exists check)
     [string]$Script:LogoIcon = Join-Path -Path $Global:ModuleRoot -ChildPath 'PackagingFramework.ico'
     [string]$Script:LogoBanner = Join-Path -Path $Global:ModuleRoot -ChildPath 'PackagingFramework.png'
-    [string]$ModuleJsonFile = Join-Path -Path $Global:ModuleRoot -ChildPath 'PackagingFramework.json'  # not global intentionally, only the json object will be clobal, but not the file !
+    [string]$ModuleJsonFile = Join-Path -Path $Global:ModuleRoot -ChildPath $PackageJsonFileName  # not global intentionally, only the json object will be clobal, but not the file !
     [string]$Script:CustomTypesFile = Join-Path -Path $Global:ModuleRoot -ChildPath 'PackagingFramework.cs'
     If (-not (Test-Path -LiteralPath $Script:LogoIcon -PathType 'Leaf')) { Throw 'Packaging Framework icon file not found.' }
     If (-not (Test-Path -LiteralPath $Script:LogoBanner -PathType 'Leaf')) { Throw 'Packaging Framework logo banner file not found.' }
@@ -4176,14 +4191,6 @@ Function Initialize-Script {
 
 
 
-    ## Get package info
-    #if(-not($Global:PackageFileName)) { [string]$Global:PackageFileName = [IO.Path]::GetFileNameWithoutExtension($MyInvocation.PSCommandPath)}
-    #if(-not($Global:PackageName)) { [string]$Global:PackageName = [IO.Path]::GetFileNameWithoutExtension($MyInvocation.PSCommandPath)}
-    [string]$Global:PackageFileName = [IO.Path]::GetFileNameWithoutExtension($MyInvocation.PSCommandPath)
-    [string]$Global:PackageName = [IO.Path]::GetFileNameWithoutExtension($MyInvocation.PSCommandPath)
-    
-    # If package name is not defined we assumed module is used outside a package and because of this we disable the logging
-    if(!$PackageName) {$Global:DisableLogging = $true}
 
     ## Get config values from module JSON configuration file
     If ($Global:PSVersionInfo.Major -ge 5){ [psobject]$Global:ModuleConfigFile = get-content $ModuleJsonFile | ConvertFrom-Json  }
@@ -4494,7 +4501,7 @@ Function Initialize-Script {
         Try {
 	        [__comobject]$Global:SMSTSEnvironment = New-Object -ComObject 'Microsoft.SMS.TSEnvironment' -ErrorAction 'Stop'
 	        Write-Log -Message 'Script is currently running from a SCCM Task Sequence.' -Source $PackagingFrameworkName
-	        $Global:IsSCCMTaskSequence = $true
+			$Global:IsSCCMTaskSequence = $true
             #Write-Log -Message 'The following SCCM variables are defined:' -Source $PackagingFrameworkName
             #$Global:SMSTSEnvironment.GetVariables() | % { Write-Log -Message "$_ = $($Global:SMSTSEnvironment.Value($_))" -Source $PackagingFrameworkName} 
         }
@@ -7047,16 +7054,16 @@ Function New-Package {
 	Specify the path wher to create the package
 .PARAMETER Name
 	Specify the package name (based on the naming scheme configured in PackageFramework.json)
-.PARAMETER ExcludeModuleFiles
-	Don't copy module files into the package folder
+.PARAMETER IncludeModuleFiles
+	Copy module files into the package folder
 .PARAMETER SkipNameCheck
 	Skip naming schema check
 .PARAMETER Overwrite
 	Overwrite Existing Package
 .EXAMPLE	
-    New-Package -Path C:\Temp -Name 'Microsoft_Office_16.0_EN_01.00'
+    New-Package -Path C:\Temp -Name 'APP_ALL_Microsoft_Office_16.0_X64_EN_01.00'
 .EXAMPLE	
-    New-Package -Path C:\Temp -Name 'Microsoft_Project_16.0_EN_01.00' -ExcludeModuleFiles
+    New-Package -Path C:\Temp -Name 'APP_ALL_Microsoft_Office_16.0_X64_EN_01.00' -IncludeModuleFiles
 .NOTES
 	Created by ceterion AG
 .LINK
@@ -7066,12 +7073,12 @@ Function New-Package {
 	Param (
 		[Parameter(Mandatory=$true)]
 		[ValidateNotNullorEmpty()]
-   	[string]$Path,
+   		[string]$Path,
 		[Parameter(Mandatory=$true)]
 		[ValidateNotNullOrEmpty()]
 		[string]$Name,
 		[Parameter(Mandatory=$false)]
-		[bool]$ExcludeModuleFiles = $false,
+		[switch]$IncludeModuleFiles,
 		[Parameter(Mandatory=$false)]
 		[switch]$SkipNameCheck,
 		[Parameter(Mandatory=$false)]
@@ -7087,6 +7094,7 @@ Function New-Package {
 	Process {
 		Try
         {
+			$CurrentFolder = Get-Location
             
             # Check if script is initialize
             if (-not($ModuleConfigFile)) { Initialize-Script }
@@ -7106,15 +7114,17 @@ Function New-Package {
             New-Folder -path "$Path\$Name"
             
             # Create new files folder inside the package folder
-            New-Folder -path "$Path\$Name\Files"
+            New-Folder -path "$Path\$Name\Package"
+            New-Folder -path "$Path\$Name\Package\Files"
+            New-Folder -path "$Path\$Name\SupportFiles"
 
             # Copy packageing Framework module files (if ExcludeModuleFiles is not specified)
-            if ($ExcludeModuleFiles -eq $true) 
+            if ($IncludeModuleFiles -eq $true) 
             {
                 $ModuleBaseMain = $((Get-Module -Name PackagingFramework).ModuleBase) | Select-Object -last  1
                 $ModuleBaseExtension = $((Get-Module -Name PackagingFrameworkExtension).ModuleBase) | Select-Object -last  1
-                Copy-File "$ModuleBaseMain\PackagingFramework*.*" "$Path\$Name\PackagingFramework"
-                Copy-File "$ModuleBaseExtension\PackagingFramework*.*" "$Path\$Name\PackagingFramework" 
+                Copy-File "$ModuleBaseMain\PackagingFramework*.*" "$Path\$Name\Package\PackagingFramework"
+                Copy-File "$ModuleBaseExtension\PackagingFramework*.*" "$Path\$Name\Package\PackagingFramework" 
             }
 
             # Create PS1 file
@@ -7124,17 +7134,17 @@ Function New-Package {
 Try {
 
     # Import Packaging Framework module
-    Remove-Module PackagingFramework -ErrorAction SilentlyContinue ; if (Test-Path '.\PackagingFramework\PackagingFramework.psd1') {Import-Module .\PackagingFramework\PackagingFramework.psd1 -force ; Initialize-Script} else {if (Test-Path '.\PackagingFramework\PackagingFramework.psd1') {Import-Module .\PackagingFramework\PackagingFramework.psd1 -force ; Initialize-Script} else {Import-Module PackagingFramework -force ; Initialize-Script}}
+    Remove-Module PackagingFramework -ErrorAction SilentlyContinue ; if (Test-Path "`$PSScriptRoot\PackagingFramework\PackagingFramework.psd1") {Import-Module `$PSScriptRoot\PackagingFramework\PackagingFramework.psd1 -force ; Initialize-Script} else {if (Test-Path "`$PSScriptRoot\PackagingFramework\PackagingFramework.psd1") {Import-Module `$PSScriptRoot\PackagingFramework\PackagingFramework.psd1 -force ; Initialize-Script} else {Import-Module PackagingFramework -force ; Initialize-Script}}
 
     # Install
     If (`$deploymentType -ieq 'Install') {
-		Show-InstallationWelcome -AllowDefer -DeferDays '1' -MinimizeWindows `$false -InstallationDuration `$PackageInstallDuration
+		Show-InstallationWelcome -AllowDefer -DeferTimes '3' -MinimizeWindows `$false -InstallationDuration `$PackageInstallDuration -PersistPrompt -PromptToSave
         # <PLACE YOUR CODE HERE>
     }
 
     # Uninstall
     If (`$deploymentType -ieq 'Uninstall') {
-		Show-InstallationWelcome -CloseApps 'calc=Rechner' -AllowDefer -DeferDays '1' -MinimizeWindows `$false
+		Show-InstallationWelcome -CloseApps '' -AllowDefer -DeferTimes '3' -MinimizeWindows `$false -PersistPrompt -PromptToSave
         # <PLACE YOUR CODE HERE>
     }
 
@@ -7146,7 +7156,7 @@ Catch { [int32]`$mainExitCode = 60001; [string]`$mainErrorMessage = "`$(Resolve-
 "@
 # Save the PS1 file
 Write-Log "Create $Name.ps1" -Source "Out-File"
-$TemplateFile | Out-File -FilePath "$Path\$Name\$Name.ps1" -Encoding utf8
+$TemplateFile | Out-File -FilePath "$Path\$Name\Package\$Name.ps1" -Encoding utf8
 
 # Create JSON file
 [string]$TemplateFile = @"
@@ -7165,7 +7175,9 @@ $TemplateFile | Out-File -FilePath "$Path\$Name\$Name.ps1" -Encoding utf8
 "@
         # Save the Json file
         Write-Log "Create $Name.json" -Source "Out-File"
-        $TemplateFile | Out-File -FilePath "$Path\$Name\$Name.json" -Encoding Unicode
+		$TemplateFile | Out-File -FilePath "$Path\$Name\Package\$Name.json" -Encoding Unicode
+		
+		Set-Location $CurrentFolder
 		}
 		Catch {
 			Write-Log -Message "Failed to create package. `n$(Resolve-Error)" -Severity 3 -Source ${CmdletName}
@@ -7522,8 +7534,8 @@ Function Remove-Folder {
 	Process {
 			If (Test-Path -LiteralPath $Path -PathType 'Container') {
 				Try {
-                    $result = Remove-Item -LiteralPath $Path -Force -Recurse -ErrorAction 'SilentlyContinue' -ErrorVariable '+ErrorRemoveFolder' -verbose 4>&1
-                    Write-Log $result
+                    Remove-Item -LiteralPath $Path -Force -Recurse -ErrorAction 'SilentlyContinue' -ErrorVariable '+ErrorRemoveFolder' 4>&1
+                    Write-Log "Removed $Path and all subfolders"
 					If ($ErrorRemoveFolder) {
 						Write-Log -Message "The following error(s) took place while deleting folder(s) and file(s) recursively from path [$path]. `n$(Resolve-Error -ErrorRecord $ErrorRemoveFolder)" -Severity 2 -Source ${CmdletName}
 					}		
@@ -10996,6 +11008,7 @@ Function Show-InstallationProgress {
 	Process {
         # Skip in silten mode
 		If ($deployModeSilent) { Return }
+		If ($Global:IsSCCMTaskSequence) { Return }
 		
 		## If the default progress message hasn't been overridden and the deployment type is uninstall, use the default uninstallation message
 		If (($StatusMessage -eq $configProgressMessageInstall) -and ($deploymentType -eq 'Uninstall')) {
@@ -11555,6 +11568,7 @@ Function Show-InstallationRestartPrompt {
 	}
 	Process {
 		## Bypass if in non-interactive mode
+		if($Global:IsSCCMTaskSequence) { $deployModeSilent = $true }
 		If ($deployModeSilent) {
 			Write-Log -Message "Bypass Installation Restart Prompt [Mode: $deployMode]." -Source ${CmdletName}
 			Return
@@ -11965,6 +11979,8 @@ Function Show-InstallationWelcome {
 	Process {
 		## If running in NonInteractive mode, force the processes to close silently
 		If ($deployModeNonInteractive) { $Silent = $true }
+
+		If ($Global:IsSCCMTaskSequence) { $Silent = $true }
 		
 		## If using Zero-Config MSI Deployment, append any executables found in the MSI to the CloseApps list
 		If ($useDefaultMsi) { $CloseApps = "$CloseApps,$defaultMsiExecutablesList" }
@@ -13450,20 +13466,17 @@ Function Start-MSI {
 					#  Out of other options, make the Product Code the name of the log file
 					$LogName = $Path
 				}
-			}
-            #>
+			} else {
+				#  Get the log file name without file extension
+				If (-not $LogName) { $LogName = ([IO.FileInfo]$path).BaseName } ElseIf ('.log','.txt' -contains [IO.Path]::GetExtension($LogName)) { $LogName = [IO.Path]::GetFileNameWithoutExtension($LogName) }
+			}#>
+            
 		}
-
-		<#
-        Else {
-			#  Get the log file name without file extension
-			If (-not $LogName) { $LogName = ([IO.FileInfo]$path).BaseName } ElseIf ('.log','.txt' -contains [IO.Path]::GetExtension($LogName)) { $LogName = [IO.Path]::GetFileNameWithoutExtension($LogName) }
-		}
-        #>
 		
         # when LogName is not specified use package name as logname and add _MSI to the name
-        If (-not $LogName) { $LogName = $PackageName + '_' + 'MSI' }
+		If (-not $LogName) { $LogName = $PackageName + '_' + ([IO.FileInfo]$Path).BaseName }
 
+		
         <#
 		If ($ConfigCompressLogs) {
 			## Build the log file path
@@ -16036,7 +16049,7 @@ Function Update-FrameworkInPackages {
 
                 if (-not (Test-Path -path "$ModuleFolder\PackagingFramework" -PathType Container)) {
                     Write-log "No 'PackagingFramework' folder found in folder $ModuleFolder!" -Severity 3
-                    Thorw "No 'PackagingFramework' folder found in folder $ModuleFolder!"
+                    Throw "No 'PackagingFramework' folder found in folder $ModuleFolder!"
                 }
 
 				[Array]$FrameworkFolders = get-childitem $PackagesFolder -Filter PackagingFramework.psm1 -Recurse
