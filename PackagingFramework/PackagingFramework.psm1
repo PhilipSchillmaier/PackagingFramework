@@ -1798,7 +1798,7 @@ Function Exit-Script {
 
 
     ## Determine if balloon notification should be shown
-	If ($DeployMode -ieq 'Silent') { [boolean]$Script:configShowBalloonNotifications = $false }
+	If ($Global:DeployMode -ieq 'Silent') { [boolean]$Script:configShowBalloonNotifications = $false }
 	
 	If ($installSuccess) {
 		If (Test-Path -LiteralPath $Script:regKeyDeferHistory -ErrorAction 'SilentlyContinue') {
@@ -4128,11 +4128,11 @@ Function Initialize-Script {
     [string]$Global:ModuleRoot = Split-Path -Path $Global:ModulePath -Parent
 
     ## Set Deploy Mode switches
-    If ($DeployMode) { Write-Log -Message "Installation is running in [$DeployMode] mode." -Source $PackagingFrameworkName }
-    Switch ($deployMode) {
-	    'Silent' { $deployModeSilent = $true }
-	    'NonInteractive' { $deployModeNonInteractive = $true; $deployModeSilent = $true }
-	    Default { $deployModeNonInteractive = $false; $deployModeSilent = $false }
+    If ($Global:DeployMode) { Write-Log -Message "Installation is running in [$Global:DeployMode] mode." -Source $PackagingFrameworkName }
+    Switch ($Global:deployMode) {
+	    'Silent' { $Global:deployModeSilent = $true }
+	    'NonInteractive' { $Global:deployModeNonInteractive = $true; $Global:deployModeSilent = $true }
+	    Default { $Global:deployModeNonInteractive = $false; $Global:deployModeSilent = $false }
     }
 
     ## Check deployment type (install/uninstall)
@@ -4181,8 +4181,8 @@ Function Initialize-Script {
     }
     Catch {
 	    Write-Log -Message "Failed to load assembly. `n$(Resolve-Error)" -Severity 3 -Source $PackagingFrameworkName
-	    If ($deployModeNonInteractive) {
-		    Write-Log -Message "Continue despite assembly load error since deployment mode is [$deployMode]." -Source $PackagingFrameworkName
+	    If ($Global:deployModeNonInteractive) {
+		    Write-Log -Message "Continue despite assembly load error since deployment mode is [$Global:deployMode]." -Source $PackagingFrameworkName
 	    }
 	    Else {
 		    Exit-Script -ExitCode 60004
@@ -4333,10 +4333,6 @@ Function Initialize-Script {
 	[string]$Script:configWelcomePromptCustomMessage = $ModuleConfigFile.Localization.$UILanguage.WelcomePromptCustomMessage
 	[string]$Script:configInstallationDurationMessage = $ModuleConfigFile.Localization.$UILanguage.InstallationDurationMessage
 
-
-
-
-
     ## Variables: Files Directory
     [string]$Global:Files = Join-Path -Path $Global:ScriptDirectory -ChildPath 'Files'
     
@@ -4356,7 +4352,7 @@ Function Initialize-Script {
 
     ## Variables: Reset/Remove Variables
     [boolean]$Global:MSIRebootDetected = $false
-    [boolean]$Global:IsSCCMTaskSequence = $false
+	[boolean]$Global:IsSCCMTaskSequence = $false
 
     ## Set the Defer History registry path
     [string]$Script:regKeyDeferHistory = "$Script:ConfigRegPath\$PackagingFrameworkName\DeferHistory\$PackageName"
@@ -4395,7 +4391,6 @@ Function Initialize-Script {
 	    }
     }
     [string]$installName = $installName.Trim('_') -replace '[_]+','_'
-
 
     ## Variables: Log Files
     If ($ReferredLogName) { [string]$Global:LogName = $ReferredLogName }
@@ -4470,7 +4465,9 @@ Function Initialize-Script {
 		    Write-Log -Message "Current process is running with user account [$ProcessNTAccount] under logged in user session for [$($CurrentLoggedOnUserSession.NTAccount)]." -Source $PackagingFrameworkName
 	    }
 	    Else {
-		    Write-Log -Message "Current process is running under a system account [$ProcessNTAccount]." -Source $PackagingFrameworkName
+			Write-Log -Message "Current process is running under a system account [$ProcessNTAccount]." -Source $PackagingFrameworkName
+			$Global:deployModeNonInteractive = $true
+			$Global:deployModeSilent = $true
 	    }
 	
 	    #  Display account and session details for the account running as the console user (user with control of the physical monitor, keyboard, and mouse)
@@ -4483,17 +4480,14 @@ Function Initialize-Script {
 	
 	    #  Display the account that will be used to execute commands in the user session when is running under the SYSTEM account
 	    If ($RunAsActiveUser) {
-		    Write-Log -Message "The active logged on user is [$($RunAsActiveUser.NTAccount)]." -Source $PackagingFrameworkName
+			Write-Log -Message "The active logged on user is [$($RunAsActiveUser.NTAccount)]." -Source $PackagingFrameworkName
 	    }
     }
     Else {
 	    Write-Log -Message 'No users are logged on to the system.' -Source $PackagingFrameworkName
+		$Global:deployModeNonInteractive = $true
+		$Global:deployModeSilent = $true
     }
-
-
-
-
-
 
     ## Check if script is running from a SCCM Task Sequence
     if ($PackageName)  # don't run this when module is imported outside a package
@@ -4502,6 +4496,8 @@ Function Initialize-Script {
 	        [__comobject]$Global:SMSTSEnvironment = New-Object -ComObject 'Microsoft.SMS.TSEnvironment' -ErrorAction 'Stop'
 	        Write-Log -Message 'Script is currently running from a SCCM Task Sequence.' -Source $PackagingFrameworkName
 			$Global:IsSCCMTaskSequence = $true
+			$Global:deployModeNonInteractive = $true
+			$Global:deployModeSilent = $true
             #Write-Log -Message 'The following SCCM variables are defined:' -Source $PackagingFrameworkName
             #$Global:SMSTSEnvironment.GetVariables() | % { Write-Log -Message "$_ = $($Global:SMSTSEnvironment.Value($_))" -Source $PackagingFrameworkName} 
         }
@@ -4510,8 +4506,6 @@ Function Initialize-Script {
 	        $Global:IsSCCMTaskSequence = $false
         }
     }
-    
-
 
     # Deployment Type text strings
     Switch ($DeploymentType) {
@@ -7130,7 +7124,7 @@ Function New-Package {
             # Create PS1 file
 [string]$TemplateFile = @"
 [CmdletBinding()] Param ([Parameter(Mandatory=`$false)] [ValidateSet('Install','Uninstall')] [string]`$DeploymentType='Install', [Parameter(Mandatory=`$false)] [ValidateSet('Interactive','Silent','NonInteractive')] [string]`$DeployMode='Interactive', [Parameter(Mandatory=`$false)] [string]`$CustomParameter)
-`$Global:DeploymentType = `$DeploymentType
+`$Global:DeploymentType = `$DeploymentType; `$Global:DeployMode = `$DeployMode
 Try {
 
     # Import Packaging Framework module
@@ -10637,7 +10631,7 @@ Function Show-BalloonTip {
 	Process {
 		
         ## Skip balloon if in silent mode
-		If (($deployModeSilent) -or (-not $Script:configShowBalloonNotifications) -or (Test-PowerPoint)) { Return }
+		If (($Global:deployModeSilent) -or (-not $Script:configShowBalloonNotifications) -or (Test-PowerPoint)) { Return }
 
 		## Dispose of previous balloon
 		If ($script:notifyIcon) { Try { $script:notifyIcon.Dispose() } Catch {} }
@@ -10779,8 +10773,8 @@ Function Show-DialogBox {
 	}
 	Process {
 		#  Bypass if in silent mode
-		If ($deployMode -ieq 'silent') {
-			Write-Log -Message "Bypassing Dialog Box [Mode: $deployMode]: $Text..." -Source ${CmdletName}
+		If ($Global:deployMode -ieq 'silent') {
+			Write-Log -Message "Bypassing Dialog Box [Mode: $Global:deployMode]: $Text..." -Source ${CmdletName}
 			Return
 		}
 		
@@ -11007,7 +11001,7 @@ Function Show-InstallationProgress {
 	}
 	Process {
         # Skip in silten mode
-		If ($deployModeSilent) { Return }
+		If ($Global:deployModeSilent) { Return }
 		If ($Global:IsSCCMTaskSequence) { Return }
 		
 		## If the default progress message hasn't been overridden and the deployment type is uninstall, use the default uninstallation message
@@ -11246,8 +11240,8 @@ Function Show-InstallationPrompt {
 	}
 	Process {
 		## Bypass if in non-interactive mode
-		If ($deployModeSilent) {
-			Write-Log -Message "Bypassing Installation Prompt [Mode: $deployMode]... $Message" -Source ${CmdletName}
+		If ($Global:deployModeSilent) {
+			Write-Log -Message "Bypassing Installation Prompt [Mode: $Global:deployMode]... $Message" -Source ${CmdletName}
 			Return
 		}
 		
@@ -11568,9 +11562,9 @@ Function Show-InstallationRestartPrompt {
 	}
 	Process {
 		## Bypass if in non-interactive mode
-		if($Global:IsSCCMTaskSequence) { $deployModeSilent = $true }
-		If ($deployModeSilent) {
-			Write-Log -Message "Bypass Installation Restart Prompt [Mode: $deployMode]." -Source ${CmdletName}
+		if($Global:IsSCCMTaskSequence) { $Global:deployModeSilent = $true }
+		If ($Global:deployModeSilent) {
+			Write-Log -Message "Bypass Installation Restart Prompt [Mode: $Global:deployMode]." -Source ${CmdletName}
 			Return
 		}
 		## Get the parameters passed to the function for invoking the function asynchronously
@@ -11978,7 +11972,7 @@ Function Show-InstallationWelcome {
 	}
 	Process {
 		## If running in NonInteractive mode, force the processes to close silently
-		If ($deployModeNonInteractive) { $Silent = $true }
+		If ($Global:deployModeNonInteractive) { $Silent = $true }
 
 		If ($Global:IsSCCMTaskSequence) { $Silent = $true }
 		
@@ -12099,7 +12093,7 @@ Function Show-InstallationWelcome {
 		If (($deferTimes -lt 0) -and (-not ($deferDeadlineUniversal))) { $AllowDefer = $false }
 		
 		## Prompt the user to close running applications and optionally defer if enabled
-		If (-not ($deployModeSilent) -and (-not ($silent))) {
+		If (-not ($Global:deployModeSilent) -and (-not ($silent))) {
 			If ($forceCloseAppsCountdown -gt 0) {
 				#  Keep the same variable for countdown to simplify the code:
 				$closeAppsCountdown = $forceCloseAppsCountdown
@@ -12244,7 +12238,7 @@ Function Show-InstallationWelcome {
 		}
 		
 		## Force the processes to close silently, without prompting the user
-		If (($Silent -or $deployModeSilent) -and $CloseApps) {
+		If (($Silent -or $Global:deployModeSilent) -and $CloseApps) {
 			[array]$runningProcesses = $null
 			[array]$runningProcesses = Get-RunningProcesses $processObjects
 			If ($runningProcesses) {
@@ -13494,7 +13488,7 @@ Function Start-MSI {
 
 
 		## Set the installation Parameters
-		If ($DeployMode -ieq 'Silent') {
+		If ($Global:DeployMode -ieq 'Silent') {
 			$msiInstallDefaultParams = $Script:ConfigMSISilentParams
 			$msiUninstallDefaultParams = $Script:ConfigMSISilentParams
 		}
