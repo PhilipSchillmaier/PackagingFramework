@@ -4468,6 +4468,7 @@ Function Initialize-Script {
 			Write-Log -Message "Current process is running under a system account [$ProcessNTAccount]." -Source $PackagingFrameworkName
 			$Global:deployModeNonInteractive = $true
 			$Global:deployModeSilent = $true
+			$Global:DeployMode = "Silent"
 	    }
 	
 	    #  Display account and session details for the account running as the console user (user with control of the physical monitor, keyboard, and mouse)
@@ -4487,6 +4488,7 @@ Function Initialize-Script {
 	    Write-Log -Message 'No users are logged on to the system.' -Source $PackagingFrameworkName
 		$Global:deployModeNonInteractive = $true
 		$Global:deployModeSilent = $true
+		$Global:DeployMode = "Silent"
     }
 
     ## Check if script is running from a SCCM Task Sequence
@@ -4498,6 +4500,7 @@ Function Initialize-Script {
 			$Global:IsSCCMTaskSequence = $true
 			$Global:deployModeNonInteractive = $true
 			$Global:deployModeSilent = $true
+			$Global:DeployMode = "Silent"
             #Write-Log -Message 'The following SCCM variables are defined:' -Source $PackagingFrameworkName
             #$Global:SMSTSEnvironment.GetVariables() | % { Write-Log -Message "$_ = $($Global:SMSTSEnvironment.Value($_))" -Source $PackagingFrameworkName} 
         }
